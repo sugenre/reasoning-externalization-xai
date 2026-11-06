@@ -1,0 +1,286 @@
+experiment:
+  schema_version: llm4xai-db-1
+  paths:
+    panel_parquet: panel31_newprepro_nannormal_fixbidask.parquet
+    shap_local: shap_local_test_seed{seed}.parquet
+    monthly_state: monthly_state_seed{seed}.parquet
+    monthly_ic: monthly_ic_seed{seed}.parquet
+    booster: frozen_seed{seed}.ubj
+    booster_meta: frozen_meta_seed{seed}.json
+  xgboost:
+    primary_seed: 42
+    robustness_seed: 0
+    K_star:
+      42: 1500
+      0: 1000
+    n_estimators_trained: 3000
+    predict_call: bst.predict(dmat, iteration_range=(0, K_star))
+    shap_call: bst.predict(dmat, pred_contribs=True, iteration_range=(0, K_star))
+    retrain: false
+    recompute_shap_if_valid: false
+  split:
+    target: next_month_ret_original
+    target_winsorized: false
+    train:
+      lo: '1995-01-01'
+      hi: '2009-12-31'
+      rows: 1370596
+      months: 180
+    validation:
+      lo: '2010-01-01'
+      hi: '2011-12-31'
+      rows: 159085
+      months: 24
+    test:
+      lo: '2012-01-01'
+      hi: '2023-11-30'
+      rows: 1097129
+      months: 143
+  features:
+    n: 30
+    removed:
+    - williams_r
+    model_order:
+    - lowest_bid
+    - highest_ask
+    - close_price
+    - ma3
+    - ma12
+    - price_distance_ma12
+    - high_12m_ratio
+    - ma_cross
+    - momentum12
+    - stochastic
+    - rsi
+    - macd
+    - signal_line
+    - volatility_12
+    - parkinson_vol
+    - bb_width
+    - atr
+    - volume
+    - volume_ma12
+    - volume_ratio
+    - obv_normalized
+    - turnover_ratio
+    - mom1m
+    - mom6m
+    - retskew12m
+    - maxret12m
+    - beta60m
+    - dolvol
+    - amihud
+    - bidask
+    retrieval_order:
+    - lowest_bid
+    - highest_ask
+    - close_price
+    - ma3
+    - ma12
+    - price_distance_ma12
+    - high_12m_ratio
+    - ma_cross
+    - momentum12
+    - mom1m
+    - mom6m
+    - macd
+    - signal_line
+    - stochastic
+    - rsi
+    - volatility_12
+    - parkinson_vol
+    - bb_width
+    - atr
+    - beta60m
+    - retskew12m
+    - maxret12m
+    - volume
+    - volume_ma12
+    - volume_ratio
+    - obv_normalized
+    - turnover_ratio
+    - dolvol
+    - amihud
+    - bidask
+    winsorization: train 1%/99% boundaries, followed by train mean/std scaling
+  display_features:
+    top_local: 3
+    top_global: 3
+    union: true
+    backfill_after_dedup: false
+    shared_across_conditions: true
+  temporal_evidence:
+    L: 6
+    window: P[j, t-5 .. t]
+    delta6P: P[j,t] - P[j,t-5]
+    slope: OLS slope of P[j, t-5..t] on x = 0..5
+    rank_convention: 'rank 1 = 가장 큰 P (30개 피처 전체 대상, ties: 값 내림차순 안정정렬)'
+  retrieval:
+    L: 6
+    K: 5
+    distance: euclidean
+    temporal_nms_m: 6
+    eligibility: s <= t - 7
+    delta_P: P[t] - P[t-1]
+    Q_shape:
+    - 6
+    - 30
+    Q_flat_dim: 180
+    library_scope: test 구간 안에서 7개월 지지집합 [s-6, s] 이 모두 test 인 endpoint 만
+    library_excludes:
+    - train
+    - validation
+    - test-future
+    exactly_K_required: true
+    subsequent_return: r[s+1] = month s 의 next_month_ret_original 횡단면 동일가중 평균
+  case_sampling:
+    rng_seed: 42
+    quintiles: 5
+    per_quintile: 1
+    cases_per_month: 5
+    prediction_source: frozen XGBoost 예측 (shap_local_test_seed{seed}.parquet 의 pred
+      열)
+  conditions:
+    order:
+    - C0-Evidence Control
+    - C1-Raw
+    - C2-Numerical
+    - C3-Relational
+    - C3-Analog
+    C0-Evidence Control:
+      prediction: true
+      feature_values: true
+      local_shap: true
+      global_P: true
+    C1-Raw:
+      inherits: C0-Evidence Control
+      raw_P_sequence: true
+    C2-Numerical:
+      inherits: C1-Raw
+      delta6P: true
+      slope: true
+      trend_direction: true
+    C3-Relational:
+      inherits: C2-Numerical
+      overtakes_relations: true
+    C3-Analog:
+      inherits: C3-Relational
+      analogs: true
+      analog_rank_ic: true
+  statistics:
+    primary_contrasts:
+    - - C1-Raw
+      - C0-Evidence Control
+    - - C2-Numerical
+      - C1-Raw
+    - - C3-Relational
+      - C2-Numerical
+    - - C3-Analog
+      - C3-Relational
+    cluster_unit: month
+    bootstrap: paired month-cluster bootstrap
+    n_resamples: 10000
+    rng_seed: 12345
+    ci: 0.95
+    multiplicity: holm
+llm:
+  primary:
+    model_id: Qwen/Qwen3-32B
+    role: primary
+    gpu: 0
+    cuda_visible_devices: '0'
+    dtype: bfloat16
+    tensor_parallel_size: 1
+    thinking_mode: false
+    expected_gpu_name_contains: RTX PRO 6000
+  robustness:
+    model_id: Qwen/Qwen3-14B
+    role: robustness
+    gpu: 1
+    cuda_visible_devices: '1'
+    dtype: bfloat16
+    tensor_parallel_size: 1
+    thinking_mode: false
+  qwen3_8b:
+    model_id: Qwen/Qwen3-8B
+    role: qwen3_8b
+    gpu: 0
+    cuda_visible_devices: '0'
+    dtype: bfloat16
+    tensor_parallel_size: 1
+    thinking_mode: false
+  ministral_8b:
+    model_id: mistralai/Ministral-8B-Instruct-2410
+    role: ministral_8b
+    gpu: 1
+    cuda_visible_devices: '1'
+    dtype: bfloat16
+    tensor_parallel_size: 1
+    thinking_mode: false
+  llama3_8b_official:
+    model_id: meta-llama/Llama-3.1-8B-Instruct
+    model_revision_pinned: 0e9e39f249a16976918f6564b8830bc894c89659
+    role: llama3_8b_official
+    gpu: 1
+    cuda_visible_devices: '1'
+    dtype: bfloat16
+    tensor_parallel_size: 1
+    thinking_mode: false
+  decoding:
+    do_sample: false
+    temperature: 0.0
+    top_p: 1.0
+    top_k: -1
+    repetition_penalty: 1.0
+    max_new_tokens: 1536
+    max_model_len: 8192
+    seed: 42
+  framework:
+    preferred: vllm
+    fallback_allowed_without_report: false
+    vllm_engine_args:
+      gpu_memory_utilization: 0.9
+      max_model_len: 8192
+      dtype: bfloat16
+      tensor_parallel_size: 1
+      enforce_eager: false
+      trust_remote_code: false
+  generation:
+    language: en
+    max_factual_sentences: 5
+    max_caution_sentences: 1
+    max_abstain_sentences: 2
+    output_format: json_object
+    schema_file: config/generation_schema.json
+    repair_retries: 2
+    repair_temperature: 0.0
+  numeric_display:
+    P: 5
+    phi: 6
+    delta6P: 4
+    slope: 6
+    ret: 4
+    distance: 6
+    z: 3
+    raw: 4
+    ic: 4
+  qwen3_8b_base:
+    model_id: Qwen/Qwen3-8B-Base
+    upstream_note: Qwen3-8B 의 사전학습 판 (post-training 없음)
+    role: qwen3_8b_base
+    gpu: 0
+    cuda_visible_devices: '0'
+    dtype: bfloat16
+    tensor_parallel_size: 1
+    thinking_mode: false
+    prompt_style: raw
+  qwen3_14b_base:
+    model_id: Qwen/Qwen3-14B-Base
+    upstream_note: Qwen3-14B 의 사전학습 판 (post-training 없음)
+    role: qwen3_14b_base
+    gpu: 0
+    cuda_visible_devices: '0'
+    dtype: bfloat16
+    tensor_parallel_size: 1
+    thinking_mode: false
+    prompt_style: raw

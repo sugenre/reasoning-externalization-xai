@@ -1,0 +1,8 @@
+duckdb
+numpy
+pandas
+pyarrow
+PyYAML
+scipy
+vllm==0.11.2
+transformers

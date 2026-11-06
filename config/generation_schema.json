@@ -1,0 +1,139 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "retrieval-grounded financial XAI narrative output",
+  "type": "object",
+  "required": [
+    "claims"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "narrative": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "description": "LEGACY / OPTIONAL. The model must not emit this. If present it is ignored and overwritten by the pipeline with the deterministic join of claim texts."
+    },
+    "claims": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "required": [
+          "sentence_id",
+          "text",
+          "claim_type",
+          "subject",
+          "predicate",
+          "value",
+          "from_rank",
+          "to_rank",
+          "evidence_ids"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "sentence_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 600
+          },
+          "claim_type": {
+            "type": "string",
+            "enum": [
+              "prediction",
+              "local_contribution",
+              "global_importance",
+              "temporal_trend",
+              "temporal_change",
+              "relation_overtakes",
+              "analog_similarity",
+              "analog_universe_outcome",
+              "analog_model_performance",
+              "analog_summary",
+              "abstain",
+              "caution"
+            ]
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 120
+          },
+          "predicate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "caution",
+              "contributes_negative",
+              "contributes_positive",
+              "decreasing",
+              "flat",
+              "increasing",
+              "mean_rank_ic",
+              "mean_subsequent_universe_return",
+              "median_rank_ic",
+              "median_subsequent_universe_return",
+              "monthly_rank_ic",
+              "negative_universe_return_count",
+              "no_supporting_evidence",
+              "overtakes",
+              "positive_universe_return_count",
+              "predicted_return",
+              "prediction_quintile",
+              "relative_reliance",
+              "similar_to",
+              "subsequent_universe_return",
+              "window_change_delta6P",
+              null
+            ],
+            "description": "controlled vocabulary; see prompt_spec.PREDICATES"
+          },
+          "value": {
+            "type": [
+              "number",
+              "string",
+              "null"
+            ]
+          },
+          "from_rank": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 30,
+            "description": "Retained for schema compatibility; must be null in this experiment."
+          },
+          "to_rank": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 30,
+            "description": "Retained for schema compatibility; must be null in this experiment."
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "maxItems": 8,
+            "description": "Factual claims cite evidence IDs; abstain must use an empty array. Conditional enforcement is procedural."
+          }
+        }
+      }
+    }
+  }
+}

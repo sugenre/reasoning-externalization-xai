@@ -1,0 +1,442 @@
+# name_en / name_ko  : LLM 프롬프트에 노출되는 이름
+# formula            : 산출식 (원단위 기준. 모델 입력은 윈저화+표준화된 z-값)
+# source_columns     : CRSP 원천 컬럼
+# window_months      : 계산에 쓰인 과거 창 길이 (없으면 null)
+# units              : 원단위 해석
+# higher_means       : 값이 클수록 무엇을 뜻하는가  
+# discrete           : 이산 피처 여부
+# group              : 사전 고정 5그룹
+# caveat             : 반드시 함께 읽어야 하는 경고 (없으면 null)
+
+meta:
+  n_features: 30
+  removed: [williams_r]
+  removed_reason: "williams_r = 100*stochastic - 100. 이 패널에서 항등식 성립 98.93%, 위반 1.07%는 결측대치 아티팩트."
+  model_input_transform: "±inf→0 → PERMNO·date 정렬 → 윈저화(train 1%/99%) → 표준화(윈저화된 train μ,σ)"
+  adjusted_price_note: "adjp/adjhi/adjlo = 분할조정 가격. close_price·lowest_bid·highest_ask·dolvol·amihud 는 원단위 prc/bidlo/askhi 를 쓴다."
+
+features:
+
+  lowest_bid:
+    name_en: "Monthly low price (CRSP BIDLO)"
+    name_ko: "월중 최저가"
+    formula: "BIDLO (분할조정 전 원값, 절댓값 처리)"
+    formula_en: "BIDLO (raw, unadjusted for splits; absolute value taken)"
+    source_columns: [BIDLO]
+    window_months: null
+    units: "USD"
+    higher_means: "그 달의 저점 자체가 높다 = 주가 수준이 높다"
+    higher_means_en: "the month's low price itself is high, i.e. the share price level is high"
+    discrete: false
+    group: G1_price_level
+    caveat: "★ 이름은 'bid'지만 호가가 아니라 CRSP BIDLO('Bid or Low Price') = 그 달 최저가다. 매수호가로 서술하면 안 된다. 원 패널의 원천컬럼 오지정을 fixbidask 판에서 교정한 결과다."
+    caveat_en: "Despite the name, this is NOT a bid quote. It is CRSP BIDLO ('Bid or Low Price') = the lowest price during that month. Do not describe it as a buy quote. This corrects a source-column misassignment in the original panel."
+
+  highest_ask:
+    name_en: "Monthly high price (CRSP ASKHI)"
+    name_ko: "월중 최고가"
+    formula: "ASKHI (분할조정 전 원값, 절댓값 처리)"
+    formula_en: "ASKHI (raw, unadjusted for splits; absolute value taken)"
+    source_columns: [ASKHI]
+    window_months: null
+    units: "USD"
+    higher_means: "그 달의 고점이 높다 = 주가 수준이 높다"
+    higher_means_en: "the month's high price is high, i.e. the share price level is high"
+    discrete: false
+    group: G1_price_level
+    caveat: "★ 매도호가가 아니라 CRSP ASKHI('Ask or High Price') = 그 달 최고가다."
+    caveat_en: "Despite the name, this is NOT an ask quote. It is CRSP ASKHI ('Ask or High Price') = the highest price during that month."
+
+  close_price:
+    name_en: "Month-end closing price"
+    name_ko: "월말 종가"
+    formula: "|PRC| (분할조정 전 원값)"
+    formula_en: "|PRC| (raw, unadjusted for splits)"
+    source_columns: [PRC]
+    window_months: null
+    units: "USD"
+    higher_means: "주가 수준이 높다"
+    higher_means_en: "the share price level is high"
+    discrete: false
+    group: G1_price_level
+    caveat: "★ lowest_bid·highest_ask·close_price 는 셋 다 같은 달의 주가 수준을 재는 3중 중복 계열이다. 세 개가 함께 상위에 오르면 '세 가지 서로 다른 근거'가 아니라 '주가 수준 하나'다."
+    caveat_en: "lowest_bid, highest_ask and close_price all measure the same month's price LEVEL and are a triply redundant family. If all three rank highly, that is ONE piece of information (price level), not three independent reasons."
+
+  ma3:
+    name_en: "3-month moving average of adjusted price"
+    name_ko: "3개월 이동평균"
+    formula: "mean(adjp[t-2..t]), min_periods=2"
+    source_columns: [PRC, CFACPR]
+    window_months: 3
+    units: "USD (분할조정)"
+    higher_means: "단기 평균 주가 수준이 높다"
+    higher_means_en: "the short-run average price level is high"
+    discrete: false
+    group: G1_price_level
+    caveat: null
+    caveat_en: null
+
+  ma12:
+    name_en: "12-month moving average of adjusted price"
+    name_ko: "12개월 이동평균"
+    formula: "mean(adjp[t-11..t]), min_periods=6"
+    source_columns: [PRC, CFACPR]
+    window_months: 12
+    units: "USD (분할조정)"
+    higher_means: "장기 평균 주가 수준이 높다"
+    higher_means_en: "the long-run average price level is high"
+    discrete: false
+    group: G1_price_level
+    caveat: null
+    caveat_en: null
+
+  price_distance_ma12:
+    name_en: "Price distance from 12-month MA"
+    name_ko: "12개월 이동평균 대비 이격도"
+    formula: "(adjp - ma12) / ma12"
+    source_columns: [PRC, CFACPR]
+    window_months: 12
+    units: "비율 (0.10 = +10%)"
+    higher_means: "현재가가 1년 평균보다 더 높이 떠 있다"
+    higher_means_en: "the current price sits further above its one-year average"
+    discrete: false
+    group: G2_trend_mom
+    caveat: null
+    caveat_en: null
+
+  high_12m_ratio:
+    name_en: "Price to 52-week high ratio"
+    name_ko: "52주 신고가 대비 비율"
+    formula: "adjp / max(adjp[t-11..t]), min_periods=6"
+    source_columns: [PRC, CFACPR]
+    window_months: 12
+    units: "비율 (1.0 = 신고가)"
+    higher_means: "최근 1년 고점에 더 가깝다"
+    higher_means_en: "the price is closer to its 12-month high"
+    discrete: false
+    group: G2_trend_mom
+    caveat: null
+    caveat_en: null
+
+  ma_cross:
+    name_en: "Moving-average cross signal"
+    name_ko: "이동평균 교차 신호"
+    formula: "+1 if ma3 > ma12 else -1 (둘 중 하나라도 결측이면 NaN)"
+    formula_en: "+1 if ma3 > ma12 else -1 (NaN if either moving average is missing)"
+    source_columns: [PRC, CFACPR]
+    window_months: 12
+    units: "부호 {-1, +1}"
+    higher_means: "+1 = 단기평균이 장기평균 위 (골든크로스 상태)"
+    higher_means_en: "+1 means the short average is above the long average (golden-cross state)"
+    discrete: true
+    caveat: "★ 이 피처는 연속값이 아니라 ±1 이산값이다. '증가/감소'가 아니라 '상태 전환'으로만 서술해야 한다."
+    caveat_en: "This feature is DISCRETE, taking only -1 or +1. Describe it as a state or a switch, never as 'rising' or 'falling' by a continuous amount."
+    group: G2_trend_mom
+
+  momentum12:
+    name_en: "12-month price momentum"
+    name_ko: "12개월 모멘텀"
+    formula: "adjp[t] / adjp[t-12] - 1"
+    source_columns: [PRC, CFACPR]
+    window_months: 12
+    units: "비율"
+    higher_means: "지난 1년 주가 상승률이 크다"
+    higher_means_en: "the price rose more over the past year"
+    discrete: false
+    group: G2_trend_mom
+    caveat: null
+    caveat_en: null
+
+  mom1m:
+    name_en: "1-month lagged return"
+    name_ko: "1개월 모멘텀(직전월 수익률)"
+    formula: "RET.shift(1)"
+    source_columns: [RET]
+    window_months: 1
+    units: "비율"
+    higher_means: "직전 달 수익률이 높았다"
+    higher_means_en: "last month's return was higher"
+    discrete: false
+    group: G2_trend_mom
+    caveat: "ADD8 계열은 수익률을 1개월 지연시켜 쓴다(보수적 설정). 즉 t 행의 mom1m 은 t-1 달의 수익률이다."
+    caveat_en: "ADD8 features use returns lagged by one month (a conservative setting). The mom1m on row t is the return of month t-1."
+
+  mom6m:
+    name_en: "6-month lagged momentum"
+    name_ko: "6개월 모멘텀"
+    formula: "expm1(sum(log1p(RET).shift(1)[t-5..t])), min_periods=3"
+    source_columns: [RET]
+    window_months: 6
+    units: "비율"
+    higher_means: "최근 6개월 누적 수익률이 높다"
+    higher_means_en: "cumulative return over the past six months was higher"
+    discrete: false
+    group: G2_trend_mom
+    caveat: null
+    caveat_en: null
+
+  macd:
+    name_en: "MACD"
+    name_ko: "이동평균수렴확산"
+    formula: "EMA(adjp, span=12) - EMA(adjp, span=26), adjust=False"
+    source_columns: [PRC, CFACPR]
+    window_months: null
+    units: "USD (분할조정 가격 차)"
+    higher_means: "단기 EMA 가 장기 EMA 보다 크게 위 = 상승 추세 강도"
+    higher_means_en: "the short EMA sits further above the long EMA, i.e. stronger upward trend"
+    discrete: false
+    group: G2_trend_mom
+    caveat: "가격 단위이므로 고가주일수록 절댓값이 크다. 종목 간 절댓값 비교는 무의미하다."
+    caveat_en: "This is in price units, so high-priced stocks have larger magnitudes. Comparing its absolute level across stocks is meaningless."
+
+  signal_line:
+    name_en: "MACD signal line"
+    name_ko: "MACD 신호선"
+    formula: "EMA(macd, span=9), adjust=False"
+    source_columns: [PRC, CFACPR]
+    window_months: null
+    units: "USD (분할조정 가격 차)"
+    higher_means: "MACD 의 평활값이 높다"
+    higher_means_en: "the smoothed MACD level is higher"
+    discrete: false
+    group: G2_trend_mom
+    caveat: "macd 의 평활값이라 macd 와 강하게 중복된다."
+    caveat_en: "This is a smoothed version of macd and is strongly redundant with it."
+
+  stochastic:
+    name_en: "Stochastic oscillator (%K, 14-month)"
+    name_ko: "스토캐스틱"
+    formula: "(adjp - min(adjp[t-13..t])) / (max(adjp[t-13..t]) - min(adjp[t-13..t])), min_periods=6"
+    source_columns: [PRC, CFACPR]
+    window_months: 14
+    units: "0~1"
+    higher_means: "최근 14개월 가격 범위 안에서 천장권에 있다"
+    higher_means_en: "the price sits nearer the top of its 14-month range"
+    discrete: false
+    group: G3_oscillator
+    caveat: "제거된 williams_r 과 항등 관계(williams_r = 100*stochastic - 100)."
+    caveat_en: "The dropped feature williams_r is an exact linear transform of this one (williams_r = 100*stochastic - 100)."
+
+  rsi:
+    name_en: "Relative Strength Index (14-month)"
+    name_ko: "상대강도지수"
+    formula: "100 - 100/(1 + mean(gain[t-13..t]) / mean(loss[t-13..t])), min_periods=6"
+    source_columns: [PRC, CFACPR]
+    window_months: 14
+    units: "0~100"
+    higher_means: "상승폭이 하락폭을 압도 = 과매수권"
+    higher_means_en: "gains dominate losses, i.e. more overbought"
+    discrete: false
+    group: G3_oscillator
+    caveat: null
+    caveat_en: null
+
+  volatility_12:
+    name_en: "12-month return volatility"
+    name_ko: "12개월 수익률 변동성"
+    formula: "std(RET[t-11..t]), min_periods=6"
+    source_columns: [RET]
+    window_months: 12
+    units: "월간 수익률 표준편차"
+    higher_means: "수익률이 더 크게 출렁인다 = 위험이 크다"
+    higher_means_en: "returns swing more widely, i.e. higher risk"
+    discrete: false
+    group: G4_vol_risk
+    caveat: null
+    caveat_en: null
+
+  parkinson_vol:
+    name_en: "Parkinson high-low volatility"
+    name_ko: "파킨슨 변동성"
+    formula: "sqrt( mean( ln(adjhi/adjlo)^2 )[t-11..t] / (4*ln2) ), min_periods=6"
+    source_columns: [ASKHI, BIDLO, CFACPR]
+    window_months: 12
+    units: "변동성"
+    higher_means: "월중 고가-저가 폭이 넓다 = 변동성이 크다"
+    higher_means_en: "the intra-month high-low range is wider, i.e. higher volatility"
+    discrete: false
+    group: G4_vol_risk
+    caveat: null
+    caveat_en: null
+
+  bb_width:
+    name_en: "Bollinger band width"
+    name_ko: "볼린저밴드 폭"
+    formula: "4 * std(adjp[t-11..t]) / ma12, min_periods=6"
+    source_columns: [PRC, CFACPR]
+    window_months: 12
+    units: "비율"
+    higher_means: "가격 밴드가 넓다 = 가격 변동성이 크다"
+    higher_means_en: "the price band is wider, i.e. higher price volatility"
+    discrete: false
+    group: G4_vol_risk
+    caveat: "수익률 변동성이 아니라 '가격' 변동성이다."
+    caveat_en: "This is PRICE volatility, not return volatility."
+
+  atr:
+    name_en: "Average True Range (14-month EMA)"
+    name_ko: "평균 진폭"
+    formula: "EMA(TR, span=14), TR = max(hi-lo, |hi-prev_close|, |lo-prev_close|)"
+    source_columns: [ASKHI, BIDLO, PRC, CFACPR]
+    window_months: null
+    units: "USD (분할조정)"
+    higher_means: "월간 가격 변동 폭이 절대금액으로 크다"
+    higher_means_en: "the monthly price swing is larger in absolute dollars"
+    discrete: false
+    group: G4_vol_risk
+    caveat: "가격 단위라 고가주일수록 크다."
+    caveat_en: "This is in price units, so high-priced stocks have larger magnitudes."
+
+  beta60m:
+    name_en: "60-month market beta"
+    name_ko: "60개월 시장베타"
+    formula: "cov(RET.shift(1), VWRETD.shift(1))[t-59..t] / var(VWRETD.shift(1))[t-59..t], min_periods=24"
+    source_columns: [RET, VWRETD]
+    window_months: 60
+    units: "베타"
+    higher_means: "시장이 1% 움직일 때 이 종목이 더 크게 따라 움직인다"
+    higher_means_en: "the stock moves more strongly when the market moves by 1%"
+    discrete: false
+    group: G4_vol_risk
+    caveat: "±inf 는 NaN 처리 후 월별 횡단면 중앙값으로 대치됐다."
+    caveat_en: "Infinite values were set to NaN and then imputed with the monthly cross-sectional median."
+
+  retskew12m:
+    name_en: "12-month return skewness"
+    name_ko: "12개월 수익률 왜도"
+    formula: "skew(RET.shift(1)[t-11..t]), min_periods=6"
+    source_columns: [RET]
+    window_months: 12
+    units: "왜도"
+    higher_means: "오른쪽 꼬리가 길다 = 드물게 큰 상승이 있었다"
+    higher_means_en: "the right tail is longer, i.e. there were rare large gains"
+    discrete: false
+    group: G4_vol_risk
+    caveat: "음수면 급락(왼쪽 꼬리) 위험이 컸다는 뜻이다."
+    caveat_en: "A negative value means a long left tail, i.e. crash risk was elevated."
+
+  maxret12m:
+    name_en: "Maximum monthly return over 12 months"
+    name_ko: "12개월 최대 월수익률"
+    formula: "max(RET.shift(1)[t-11..t]), min_periods=6"
+    source_columns: [RET]
+    window_months: 12
+    units: "비율"
+    higher_means: "복권형(lottery) 성향이 강하다"
+    higher_means_en: "stronger lottery-like behaviour"
+    discrete: false
+    group: G4_vol_risk
+    caveat: null
+    caveat_en: null
+
+  volume:
+    name_en: "Monthly share volume"
+    name_ko: "거래량"
+    formula: "VOL"
+    source_columns: [VOL]
+    window_months: null
+    units: "주"
+    higher_means: "거래된 주식 수가 많다"
+    higher_means_en: "more shares were traded"
+    discrete: false
+    group: G5_liquidity
+    caveat: null
+    caveat_en: null
+
+  volume_ma12:
+    name_en: "12-month average volume"
+    name_ko: "12개월 평균 거래량"
+    formula: "mean(VOL[t-11..t]), min_periods=6"
+    source_columns: [VOL]
+    window_months: 12
+    units: "주"
+    higher_means: "평소 거래량 수준이 높다"
+    higher_means_en: "the usual level of trading volume is higher"
+    discrete: false
+    group: G5_liquidity
+    caveat: null
+    caveat_en: null
+
+  volume_ratio:
+    name_en: "Volume ratio"
+    name_ko: "거래량 비율"
+    formula: "VOL / volume_ma12"
+    source_columns: [VOL]
+    window_months: 12
+    units: "배수 (1.0 = 평소 수준)"
+    higher_means: "이번 달 거래가 평소보다 활발했다"
+    higher_means_en: "trading this month was busier than usual"
+    discrete: false
+    group: G5_liquidity
+    caveat: null
+    caveat_en: null
+
+  obv_normalized:
+    name_en: "Normalized on-balance volume"
+    name_ko: "표준화 OBV"
+    formula: "(obv - expanding_mean(obv)) / (expanding_std(obv) + 1e-12),  obv = cumsum(sign(RET)*VOL)"
+    source_columns: [RET, VOL]
+    window_months: null
+    units: "z-점수 (확장창)"
+    higher_means: "누적 매수 압력이 그 종목의 과거 평균보다 높다"
+    higher_means_en: "cumulative buying pressure is above this stock's own historical average"
+    discrete: false
+    group: G5_liquidity
+    caveat: "확장창(expanding) 통계라 초기 구간에서 불안정하다."
+    caveat_en: "This uses expanding-window statistics and is unstable early in a stock's history."
+
+  turnover_ratio:
+    name_en: "Share turnover"
+    name_ko: "회전율"
+    formula: "VOL / SHROUT"
+    source_columns: [VOL, SHROUT]
+    window_months: null
+    units: "배수"
+    higher_means: "발행주식 대비 손바뀜이 잦다 = 거래가 활발하다"
+    higher_means_en: "shares change hands more often relative to shares outstanding"
+    discrete: false
+    group: G5_liquidity
+    caveat: null
+    caveat_en: null
+
+  dolvol:
+    name_en: "Dollar volume"
+    name_ko: "거래대금"
+    formula: "|PRC| * VOL"
+    source_columns: [PRC, VOL]
+    window_months: null
+    units: "USD"
+    higher_means: "거래된 금액이 크다 = 유동성이 풍부하다"
+    higher_means_en: "a larger dollar amount was traded, i.e. more liquid"
+    discrete: false
+    group: G5_liquidity
+    caveat: null
+    caveat_en: null
+
+  amihud:
+    name_en: "Amihud illiquidity"
+    name_ko: "아미후드 비유동성"
+    formula: "|RET| / dolvol"
+    source_columns: [RET, PRC, VOL]
+    window_months: null
+    units: "비유동성 (수익률/USD)"
+    higher_means: "★ 값이 클수록 '덜 유동적'이다 (유동성이 좋은 것이 아니다)"
+    higher_means_en: "LESS liquid, not more. A higher Amihud value means a small trade moves the price a lot"
+    discrete: false
+    group: G5_liquidity
+    caveat: "★★ 이름과 방향이 반대로 읽히기 쉽다. amihud 가 크다 = 적은 금액 거래로도 가격이 크게 움직인다 = 비유동적."
+    caveat_en: "The name and the direction are easy to read backwards. High amihud = illiquid. Never describe a high amihud as good liquidity."
+
+  bidask:
+    name_en: "Relative bid-ask spread"
+    name_ko: "상대 호가 스프레드"
+    formula: "(ASK - BID) / ((ASK + BID)/2)"
+    source_columns: [BID, ASK]
+    window_months: null
+    units: "비율"
+    higher_means: "매수-매도 호가 간격이 넓다 = 거래비용이 크고 덜 유동적이다"
+    higher_means_en: "the gap between buy and sell quotes is wider, i.e. higher trading cost and less liquidity"
+    discrete: false
+    group: G5_liquidity
+    caveat: "★ 이 피처만 '월말 마지막 거래일 종가 호가' BID/ASK 를 쓴다. lowest_bid/highest_ask 가 쓰는 BIDLO/ASKHI 와 원천이 다르다. 원자료에 ASK < BID 인 행이 0.34% 있어 음의 스프레드가 존재한다(최솟값 -0.168)."
+    caveat_en: "This is the ONLY feature that uses month-end closing BID/ASK quotes. lowest_bid and highest_ask use BIDLO/ASKHI, a different source. 0.34% of raw rows have ASK < BID, producing negative spreads (minimum -0.168)."
